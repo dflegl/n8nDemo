@@ -4,6 +4,11 @@
 # Local backup archives produced by ./n8n.sh backup
 backups/
 
+# Terminal session recordings left behind by the `script` command.
+# `script` with no arguments writes to ./typescript in the current directory
+# and keeps appending until the session is closed, so the file never settles.
+typescript
+
 # OS noise
 .DS_Store
 Thumbs.db

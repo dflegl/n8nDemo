@@ -227,8 +227,25 @@ Publishing to GitHub, parameters `[owner] [repo-name]`, defaults
   is not the target one
 - create an initial commit if the repository has none; refuse to continue if
   there are uncommitted changes
-- `gh repo create <owner>/<name> --public --source=. --remote=origin --push`,
-  or a plain `git push` if `origin` already exists
+- handle **all three** starting states, so the script is safe to re-run:
+  1. `origin` already configured → use it
+  2. the repo exists on GitHub but there is no `origin` → `git remote add` and
+     push. This is the state after the user creates the repo by hand, and
+     omitting it makes a failed run impossible to recover from.
+  3. the repo does not exist → `gh repo create`, then add the remote
+- keep repository creation and `git push` as **separate steps**; do not use
+  `gh repo create --source=. --push`. When creation fails there is no remote to
+  retry against, and the combined form hides which half failed.
+- creation can legitimately fail on permissions. A **fine-grained PAT cannot
+  create repositories** unless it grants `Administration: write`; classic
+  tokens need the `repo` scope. Do not let the raw GraphQL error
+  (`Resource not accessible by personal access token (createRepository)`)
+  reach the user — catch it and print both ways forward: create the repo by
+  hand at https://github.com/new and re-run, or re-authenticate. Likewise, if
+  the push fails, mention that fine-grained tokens additionally need
+  `Contents: write` on the repository.
+- note that `gh auth status` prints no `Token scopes:` line for fine-grained
+  PATs, so the presence of an account says nothing about what it may do
 
 ### `examples/sidecar-service/docker-compose.yml`
 

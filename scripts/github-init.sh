@@ -76,19 +76,60 @@ elif ! git diff-index --quiet HEAD -- 2>/dev/null; then
   die "Aborted."
 fi
 
-# --- remote + push ----------------------------------------------------------
+# --- remote ------------------------------------------------------------------
+# Three possible starting states, all of which must work on a re-run:
+#   a) origin already configured      -> use it
+#   b) repo exists on GitHub, no origin -> attach to it (e.g. created by hand)
+#   c) repo does not exist            -> create it
+DESCRIPTION="Reproducible n8n Community Edition sandbox: Docker Compose, bootstrap script, host file-exchange directory."
+
 if git remote get-url origin >/dev/null 2>&1; then
   ok "Remote 'origin' already set: $(git remote get-url origin)"
-  log "Pushing"
-  git push -u origin "$(git rev-parse --abbrev-ref HEAD)"
+
+elif gh repo view "$OWNER/$NAME" --json name >/dev/null 2>&1; then
+  log "github.com/$OWNER/$NAME already exists - attaching to it"
+  git remote add origin "https://github.com/$OWNER/$NAME.git"
+  ok "Remote 'origin' added"
+
 else
-  log "Creating github.com/$OWNER/$NAME ($VISIBILITY) and pushing"
-  gh repo create "$OWNER/$NAME" \
-    --"$VISIBILITY" \
-    --source=. \
-    --remote=origin \
-    --push \
-    --description "Reproducible n8n Community Edition sandbox: Docker Compose, bootstrap script, host file-exchange directory."
+  log "Creating github.com/$OWNER/$NAME ($VISIBILITY)"
+  if gh repo create "$OWNER/$NAME" \
+       --"$VISIBILITY" \
+       --description "$DESCRIPTION" >/dev/null 2>&1; then
+    git remote add origin "https://github.com/$OWNER/$NAME.git"
+    ok "Repository created and remote 'origin' added"
+  else
+    # Most common cause: the account is authenticated with a fine-grained PAT.
+    # Those cannot create repositories unless the token grants
+    # "Administration: write" on the account. Classic tokens need "repo".
+    warn "Could not create the repository through the API."
+    echo
+    echo "  This usually means the token for '$OWNER' lacks permission to create"
+    echo "  repositories. Fine-grained personal access tokens need"
+    echo "  'Administration: write'; classic tokens need the 'repo' scope."
+    echo
+    echo "  Two ways forward:"
+    echo "    1. Create it by hand at https://github.com/new"
+    echo "         name:       $NAME"
+    echo "         visibility: $VISIBILITY"
+    echo "         do NOT add a README, .gitignore or licence"
+    echo "       then re-run this script - it will attach to the existing repo."
+    echo "    2. Re-authenticate with a token that may create repositories:"
+    echo "         gh auth login"
+    echo
+    die "Aborted."
+  fi
+fi
+
+# --- push ---------------------------------------------------------------------
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+log "Pushing '$BRANCH' to origin"
+if ! git push -u origin "$BRANCH"; then
+  echo
+  warn "Push failed."
+  echo "  A fine-grained token also needs 'Contents: write' on this repository."
+  echo "  Check the token's permissions, then re-run this script."
+  die "Aborted."
 fi
 
 ok "Published: https://github.com/$OWNER/$NAME"
