@@ -358,4 +358,5 @@ n8nDemo/
 
 `docs/REBUILD_PROMPT.md` is a self-contained specification written as a prompt:
 hand it to an AI assistant and it will reconstruct this repository from
-scratch. It is written in Czech; everything else here is English.
+scratch. Keep it in sync when you change anything here — a specification that
+has drifted from the code is worse than none.

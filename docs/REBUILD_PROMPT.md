@@ -1,113 +1,112 @@
-# Prompt pro znovuvytvoření tohoto repozitáře
+# Prompt for recreating this repository
 
-Tento soubor je **samostatný prompt**. Zkopíruj všechno od značky
-`=== ZAČÁTEK PROMPTU ===` níž a vlož to do AI asistenta (Claude, ChatGPT,
-Copilot, Cursor…). Výsledkem bude funkční kopie tohoto repozitáře.
-
-Prompt je psán česky, ale **všechny vygenerované soubory musí být anglicky**.
+This file is a **self-contained prompt**. Copy everything below the
+`=== PROMPT START ===` marker and paste it into an AI assistant (Claude,
+ChatGPT, Copilot, Cursor, …). The result is a working copy of this repository.
 
 ---
 
-=== ZAČÁTEK PROMPTU ===
+=== PROMPT START ===
 
-Vytvoř repozitář `n8nDemo` — reprodukovatelný sandbox pro n8n Community
-Edition běžící v Dockeru. Cílem je, aby šlo repozitář kdykoliv naklonovat na
-jakýkoliv macOS nebo Linux stroj, spustit jeden skript a mít funkční n8n —
-a stejně tak ho beze stop zase odstranit.
+Create a repository called `n8nDemo` — a reproducible sandbox for n8n Community
+Edition running in Docker. The goal: clone the repository on any macOS or Linux
+machine, run a single script, get a working n8n — and be able to remove it
+again without leaving traces.
 
-## Jazyk
+## Language
 
-Veškerý obsah souborů (kód, komentáře, README, dokumentace, commit messages)
-piš **anglicky**. Jedinou výjimkou je soubor `docs/REBUILD_PROMPT.md`, který je
-česky a obsahuje tento prompt.
+Write all file contents — code, comments, README, documentation, commit
+messages — in **English**. No exceptions, including this prompt file itself.
 
-## Cílové prostředí
+## Target environment
 
-- macOS (Apple Silicon i Intel) a Linux x86_64
-- Docker Engine + plugin **Compose v2** (`docker compose`, ne `docker-compose`)
-- Shell skripty v `bash`, přenositelné mezi macOS (BSD utils) a Linuxem (GNU
-  utils) — pozor na rozdíly v `sed -i`, `stat`, `readlink -f`
+- macOS (Apple Silicon and Intel) and Linux x86_64
+- Docker Engine with the **Compose v2** plugin (`docker compose`, not
+  `docker-compose`)
+- Shell scripts in `bash`, portable between macOS (BSD userland) and Linux (GNU
+  userland) — mind the differences in `sed -i`, `stat`, `readlink -f`
 
-## Architektura, kterou implementuj
+## Architecture to implement
 
-### Kontejner
+### Container
 
-Jeden kontejner s n8n Community Edition:
+A single container running n8n Community Edition:
 
-- image `docker.n8n.io/n8nio/n8n:${N8N_VERSION}`, verzi **připni** (v době
-  psaní `1.123.91`), nikdy `latest`
-- úložiště **SQLite** (výchozí n8n), žádný Postgres
-- port publikovaný **pouze na loopback**: `127.0.0.1:${N8N_PORT}:5678`
-- healthcheck na `/healthz` pomocí `wget` (image je Alpine/BusyBox, `curl`
-  nemusí být přítomen)
+- image `docker.n8n.io/n8nio/n8n:${N8N_VERSION}`, with the version **pinned**
+  (`1.123.91` at the time of writing), never `latest`
+- **SQLite** storage (the n8n default), no Postgres
+- port published on **loopback only**: `127.0.0.1:${N8N_PORT}:5678`
+- healthcheck against `/healthz` using `wget` — the image is Alpine/BusyBox
+  based and `curl` is not guaranteed to be present
 
-Povinné proměnné prostředí:
+Required environment variables:
 
-| Proměnná | Hodnota | Proč |
+| Variable | Value | Why |
 |---|---|---|
 | `N8N_HOST` | `localhost` | |
-| `N8N_PORT` | `5678` | interní port |
+| `N8N_PORT` | `5678` | internal port |
 | `N8N_PROTOCOL` | `http` | |
-| `WEBHOOK_URL` | `http://localhost:${N8N_PORT}/` | základ URL produkčních webhooků |
-| `N8N_SECURE_COOKIE` | `false` | n8n jinak odmítne nastavit auth cookie přes plain HTTP |
+| `WEBHOOK_URL` | `http://localhost:${N8N_PORT}/` | base URL for production webhooks |
+| `N8N_SECURE_COOKIE` | `false` | n8n otherwise refuses to set its auth cookie over plain HTTP |
 | `DB_TYPE` | `sqlite` | |
-| `N8N_ENCRYPTION_KEY` | z `.env` | šifrování credentials |
+| `N8N_ENCRYPTION_KEY` | from `.env` | credential encryption |
 | `GENERIC_TIMEZONE`, `TZ` | `Europe/Prague` | |
-| `N8N_PUBLIC_API_DISABLED` | `false` | zapne REST API na `/api/v1` |
-| `N8N_RUNNERS_ENABLED` | `true` | podporovaný model spouštění Code nodes |
+| `N8N_PUBLIC_API_DISABLED` | `false` | enables the REST API at `/api/v1` |
+| `N8N_RUNNERS_ENABLED` | `true` | the supported execution model for Code nodes |
 | `NODE_FUNCTION_ALLOW_BUILTIN` | `*` | |
 | `NODE_FUNCTION_ALLOW_EXTERNAL` | `*` | |
-| `N8N_BLOCK_ENV_ACCESS_IN_NODE` | `true` | Code node nesmí přečíst env, tedy ani encryption key |
+| `N8N_BLOCK_ENV_ACCESS_IN_NODE` | `true` | Code nodes must not read env vars, hence not the encryption key |
 | `N8N_DIAGNOSTICS_ENABLED` | `false` | |
 | `N8N_VERSION_NOTIFICATIONS_ENABLED` | `false` | |
 | `N8N_HIRING_BANNER_ENABLED` | `false` | |
 
-Bezpečnostní nastavení, která nic neomezují v experimentování:
+Security settings that cost nothing in terms of experimentation:
 
 - `security_opt: [no-new-privileges:true]`
 - `cap_drop: [ALL]`
-- **nikdy** nemountuj `/var/run/docker.sock` (= root na hostu)
-- `extra_hosts: ["host.docker.internal:host-gateway"]` — host **má** být
-  dostupný, je to záměr; na Linuxu je tento řádek nutný
+- **never** mount `/var/run/docker.sock` (it is equivalent to root on the host)
+- `extra_hosts: ["host.docker.internal:host-gateway"]` — host access **is**
+  intended here; this line is required on Linux
 
-### Úložiště na hostu
+### Host storage
 
-Interface adresář `$HOME/docker/n8n_data`, rozdělený na dva podadresáře, aby se
-interní stav n8n nemíchal s uživatelskými soubory:
+Interface directory `$HOME/docker/n8n_data`, split into two subdirectories so
+that n8n's internal state does not get mixed with user files:
 
-| Host | Kontejner | Obsah |
+| Host | Container | Contents |
 |---|---|---|
-| `$HOME/docker/n8n_data/.n8n` | `/home/node/.n8n` | SQLite DB, encryption key, logy |
-| `$HOME/docker/n8n_data/files` | `/data/files` | výměna souborů host ↔ workflow |
+| `$HOME/docker/n8n_data/.n8n` | `/home/node/.n8n` | SQLite DB, encryption key, logs |
+| `$HOME/docker/n8n_data/files` | `/data/files` | file exchange, host ↔ workflows |
 
-### Sítě
+### Networks
 
-| Síť | Typ | Účel |
+| Network | Type | Purpose |
 |---|---|---|
-| `n8n_net` | spravovaná Composem, bridge | výchozí egress, NAT na internet |
-| `n8n_shared` | **`external: true`**, vytváří ji `bootstrap.sh` | komunikace mezi kontejnery napříč stacky |
+| `n8n_net` | Compose-managed, bridge | default egress, NAT to the internet |
+| `n8n_shared` | **`external: true`**, created by `bootstrap.sh` | container-to-container traffic across stacks |
 
-`n8n_shared` musí být externí, aby `./n8n.sh destroy` nemohl síť odstranit
-zpod cizích stacků, které na ní visí.
+`n8n_shared` must be external so that `./n8n.sh destroy` cannot remove the
+network out from under unrelated stacks attached to it.
 
-### Izolace — záměrné rozhodnutí
+### Isolation — a deliberate decision
 
-Žádná omezení egressu. n8n smí na internet, na LAN i na hostitelské služby
-přes `host.docker.internal`. Je to sandbox pro zkoušení.
+No egress restrictions. n8n may reach the internet, the LAN, and host services
+via `host.docker.internal`. This is a sandbox meant for experimentation.
 
-Hranice, které platí tak jako tak, a které v dokumentaci **jasně popiš**:
+Boundaries that hold regardless, and which the documentation must state
+**clearly**:
 
-- souborový systém hosta **není** vidět, kromě dvou bind mountů výše
-- Docker daemon **není** dostupný, protože socket není namountovaný
+- the host filesystem is **not** visible, apart from the two bind mounts above
+- the Docker daemon is **not** reachable, because the socket is not mounted
 
-Do `docs/NETWORKING.md` navíc popiš volitelný recept na skutečnou izolaci
-pomocí **network sidecaru** (kontejner s `NET_ADMIN`, který vlastní network
-namespace a aplikuje iptables; n8n se připojí přes `network_mode:
-service:<sidecar>`). Uveď i jeho nevýhody: RFC1918 pravidla rozbijí
-container-to-container provoz, pokud se před REJECT nedají ACCEPT pravidla pro
-`n8n_shared` a pro embedded DNS `127.0.0.11`.
+In `docs/NETWORKING.md`, additionally describe an optional recipe for real
+isolation using a **network sidecar** (a container with `NET_ADMIN` that owns
+the network namespace and applies iptables rules; n8n joins it via
+`network_mode: service:<sidecar>`). Include the trade-offs: RFC1918 rules break
+container-to-container traffic unless ACCEPT rules for `n8n_shared` and for the
+embedded DNS resolver `127.0.0.11` are placed before the REJECT rules.
 
-## Soubory k vytvoření
+## Files to create
 
 ```
 n8nDemo/
@@ -115,11 +114,11 @@ n8nDemo/
 ├── .gitignore
 ├── .env.example
 ├── docker-compose.yml
-├── bootstrap.sh                  (spustitelný)
-├── n8n.sh                        (spustitelný)
+├── bootstrap.sh                  (executable)
+├── n8n.sh                        (executable)
 ├── scripts/
 │   ├── lib.sh
-│   └── github-init.sh            (spustitelný)
+│   └── github-init.sh            (executable)
 ├── docs/
 │   ├── NETWORKING.md
 │   ├── API.md
@@ -131,203 +130,224 @@ n8nDemo/
 
 ### `.gitignore`
 
-Ignoruj `.env`, `backups/`, `.DS_Store`, editorové adresáře.
+Ignore `.env`, `backups/`, `.DS_Store`, editor directories.
 
 ### `.env.example`
 
-Komentovaná šablona s `N8N_VERSION`, `N8N_PORT`, `N8N_DATA_DIR`,
-`N8N_ENCRYPTION_KEY`, `GENERIC_TIMEZONE`. Placeholdery pro cestu a klíč, které
-`bootstrap.sh` nahradí. U encryption key uveď varování, že bez něj nejdou
-obnovit credentials.
+A commented template with `N8N_VERSION`, `N8N_PORT`, `N8N_DATA_DIR`,
+`N8N_ENCRYPTION_KEY`, `GENERIC_TIMEZONE`. Placeholders for the path and the key
+which `bootstrap.sh` substitutes. Warn next to the encryption key that
+credentials are unrecoverable without it.
 
 ### `scripts/lib.sh`
 
-Sdílené funkce, soubor se jen sourcuje:
+Shared functions, sourced only, never executed:
 
-- barevné `log`/`ok`/`warn`/`die`, barvy vypnuté pokud stdout není terminál
-- `detect_os` → `macos` | `linux`, jinak `die`
+- coloured `log`/`ok`/`warn`/`die`, colours disabled when stdout is not a TTY
+- `detect_os` → `macos` | `linux`, otherwise `die`
 - `require_cmd <cmd> [hint]`
-- `require_docker` — ověří CLI, plugin Compose v2 i dostupnost démona
-- `env_get <file> <key>` — přečte jeden klíč z env souboru **bez** sourcování
-- `confirm_word <word> <prompt>` — potvrzení opsáním přesného slova
+- `require_docker` — verifies the CLI, the Compose v2 plugin and daemon
+  reachability
+- `env_get <file> <key>` — reads a single key from an env file **without**
+  sourcing it
+- `confirm_word <word> <prompt>` — confirmation by typing an exact word
 
 ### `bootstrap.sh`
 
-Idempotentní, `set -euo pipefail`. Nikdy nepřepisuje existující `.env` a nikdy
-nesahá na existující data.
+Idempotent, `set -euo pipefail`. Never overwrites an existing `.env` and never
+touches existing data.
 
 1. **Preflight**: `require_docker`, `require_cmd openssl`
-2. **Adresáře**: cílovou cestu vezmi z existujícího `.env`, pokud existuje
-   (aby re-run nepřestěhoval data), jinak `$HOME/docker/n8n_data`. Vytvoř
-   `.n8n/` a `files/`. **Na Linuxu** `chown 1000:1000` (uživatel `node`
-   v image), s fallbackem na `sudo` a srozumitelnou chybou. Na macOS to Docker
-   Desktop řeší sám — nedělej to tam.
-3. **`.env`**: vygeneruj ze šablony pomocí `sed` s oddělovačem `|` (cesta
-   obsahuje `/`), doplň absolutní `N8N_DATA_DIR` a
-   `N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)`, nastav `chmod 600`, vypiš
-   varování o záloze klíče.
-4. **Kontrola portu**: pokud už neběží náš vlastní kontejner `n8n` a port je
-   obsazený (`lsof`), skonči s radou změnit `N8N_PORT`.
-5. **Síť**: `docker network create n8n_shared`, pokud neexistuje.
-6. **Start**: `docker compose up -d`, pak aktivně čekej na stav `healthy`
-   přes `docker inspect -f '{{.State.Health.Status}}'`, timeout 180 s. Při
-   `unhealthy` nebo timeoutu vypiš posledních 40 řádků logu a skonči chybou.
-7. Závěrečný výpis: URL, cesty na hostu, odkaz na `./n8n.sh`.
+2. **Directories**: take the target path from an existing `.env` if present (so
+   a re-run never relocates data), otherwise `$HOME/docker/n8n_data`. Create
+   `.n8n/` and `files/`. **On Linux** `chown 1000:1000` (the `node` user in the
+   image), with a `sudo` fallback and a clear error message. On macOS Docker
+   Desktop handles this — do not do it there.
+3. **`.env`**: generate it from the template using `sed` with `|` as the
+   delimiter (the path contains `/`), fill in the absolute `N8N_DATA_DIR` and
+   `N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)`, `chmod 600`, and print a
+   warning about backing up the key.
+4. **Port check**: if our own `n8n` container is not already running and the
+   port is taken (`lsof`), exit with advice to change `N8N_PORT`.
+5. **Network**: `docker network create n8n_shared` unless it exists.
+6. **Start**: `docker compose up -d`, then actively poll for the `healthy`
+   state via `docker inspect -f '{{.State.Health.Status}}'`, timeout 180 s. On
+   `unhealthy` or timeout, print the last 40 log lines and exit with an error.
+7. Closing summary: URL, host paths, pointer to `./n8n.sh`.
 
 ### `n8n.sh`
 
-Jeden ovládací skript s příkazy:
+A single control script with these commands:
 
-| Příkaz | Chování |
+| Command | Behaviour |
 |---|---|
-| `up` | zajistí existenci `n8n_shared`, `docker compose up -d` |
-| `down` | `docker compose down`, data zůstávají |
+| `up` | ensure `n8n_shared` exists, `docker compose up -d` |
+| `down` | `docker compose down`, data preserved |
 | `restart` | `docker compose up -d --force-recreate` |
-| `status` | `compose ps`, health, připojené sítě s IP, `du -sh` datového adresáře |
-| `logs [-f]` | posledních 200 řádků, nebo follow |
+| `status` | `compose ps`, health, attached networks with IPs, `du -sh` of the data directory |
+| `logs [-f]` | last 200 lines, or follow |
 | `shell` | `docker exec -it n8n /bin/sh` |
-| `url` | vypíše `http://127.0.0.1:<port>` |
-| `backup` | **zastaví kontejner** (konzistentní SQLite snapshot), `tar -czf` datového adresáře do `./backups/n8n-data-<timestamp>.tar.gz`, znovu nastartuje jen pokud běžel; upozorní, že archiv je **tajemství** — viz níže |
-| `restore <file>` | potvrzení slovem `RESTORE`, `compose down`, smaže datový adresář, rozbalí archiv, na Linuxu chown, porovná klíče (viz níže), `up` |
-| `destroy [--purge-data]` | potvrzení `DESTROY` → `compose down --volumes --remove-orphans`, smaže image; `n8n_shared` smaže **jen pokud na ní nevisí žádný kontejner**. S `--purge-data` navíc druhé potvrzení `DELETE-DATA` a smazání datového adresáře i `.env` |
-| `help` | nápověda |
+| `url` | print `http://127.0.0.1:<port>` |
+| `backup` | **stop the container** (consistent SQLite snapshot), `tar -czf` the data directory into `./backups/n8n-data-<timestamp>.tar.gz`, restart only if it was running; warn that the archive is a **secret** — see below |
+| `restore <file>` | confirm with the word `RESTORE`, `compose down`, delete the data directory, extract the archive, chown on Linux, compare keys (see below), `up` |
+| `destroy [--purge-data]` | confirm `DESTROY` → `compose down --volumes --remove-orphans`, remove the image; remove `n8n_shared` **only if no containers are attached**. With `--purge-data`, a second confirmation `DELETE-DATA` and deletion of the data directory and `.env` |
+| `help` | usage text |
 
-Každý příkaz pracující s daty musí nejdřív ověřit, že `.env` existuje, a jinak
-odkázat na `./bootstrap.sh`.
+Every data-touching command must first verify `.env` exists and otherwise point
+at `./bootstrap.sh`.
 
-**Důležitý fakt o encryption key, nepřehlédni:** n8n si encryption key zapisuje
-do `.n8n/config` jako **plaintext JSON**. Záložní archiv ho tedy obsahuje —
-spolu se zašifrovanými credentials v `database.sqlite`. Nepiš nikam, že „klíč
-v archivu není“; to je nepravda. Místo toho:
+**Important fact about the encryption key — do not miss this:** n8n writes the
+encryption key into `.n8n/config` as **plain-text JSON**. The backup archive
+therefore contains it, alongside the encrypted credentials in
+`database.sqlite`. Do not claim anywhere that "the key is not in the archive";
+that is false. Instead:
 
-- v `backup` varuj, že archiv je tajemství a patří do `backups/`, který je
-  v `.gitignore`
-- v `restore` po rozbalení **porovnej** klíč z `.n8n/config` s hodnotou
-  `N8N_ENCRYPTION_KEY` v `.env`; při neshodě vypiš klíč z archivu a instrukci,
-  že ho má uživatel vložit do `.env` a spustit `./n8n.sh restart`. Env proměnná
-  má u n8n přednost před souborem, takže neshoda znamená nerozšifrovatelné
-  credentials.
+- in `backup`, warn that the archive is a secret and belongs in `backups/`,
+  which is git-ignored
+- in `restore`, after extraction **compare** the key from `.n8n/config` against
+  `N8N_ENCRYPTION_KEY` in `.env`; on mismatch, print the archive's key and
+  instruct the user to put it in `.env` and run `./n8n.sh restart`. n8n gives
+  the environment variable precedence over the file, so a mismatch means
+  undecryptable credentials.
 
 ### `scripts/github-init.sh`
 
-Publikace na GitHub, parametry `[owner] [repo-name]`, výchozí `dflegl n8nDemo`,
-viditelnost **public**.
+Publishing to GitHub, parameters `[owner] [repo-name]`, defaults
+`dflegl n8nDemo`, visibility **public**.
 
-- nastaví `git config user.name/user.email` **lokálně v repu** (bez
-  `--global`), aby zůstala nedotčená firemní identita
-- ověří `gh auth status`; pokud cílový účet chybí, **neskončí tiše** — vypíše
-  instrukci `gh auth login --hostname github.com --web`, seznam známých účtů
-  a skončí chybou
-- `gh auth switch --hostname github.com --user <owner>`, pokud aktivní účet
-  není ten cílový
-- vytvoří initial commit, pokud repo žádný nemá; pokud existují necommitnuté
-  změny, odmítne pokračovat
+- set `git config user.name/user.email` **locally in the repository** (without
+  `--global`) so that a globally configured work identity is left alone
+- check `gh auth status`; if the target account is missing, **do not fail
+  silently** — print the `gh auth login --hostname github.com --web`
+  instruction, list the known accounts, and exit with an error
+- `gh auth switch --hostname github.com --user <owner>` if the active account
+  is not the target one
+- create an initial commit if the repository has none; refuse to continue if
+  there are uncommitted changes
 - `gh repo create <owner>/<name> --public --source=. --remote=origin --push`,
-  nebo prostý `git push`, pokud `origin` už existuje
+  or a plain `git push` if `origin` already exists
 
 ### `examples/sidecar-service/docker-compose.yml`
 
-Dva kontejnery bez mapovaných portů, připojené na externí `n8n_shared`:
-`traefik/whoami:v1.10` a `kennethreitz/httpbin:latest`. V komentáři vysvětli,
-že n8n je volá jménem služby (`http://whoami/`), ne přes localhost.
+Two containers with no published ports, attached to the external `n8n_shared`
+network: `traefik/whoami:v1.10` (listens on 80) and
+`mccutchen/go-httpbin:2.26.0` (listens on **8080**).
+
+Use `mccutchen/go-httpbin`, not `kennethreitz/httpbin` — the latter is
+amd64-only and runs under emulation on Apple Silicon, producing a platform
+mismatch warning.
+
+In the comments, explain that n8n calls these by service name
+(`http://whoami/`, `http://httpbin:8080/get`), not via localhost, and that the
+port is the container's own port rather than a host mapping.
 
 ### `examples/workflows/hello-webhook.json`
 
-Importovatelný n8n workflow, validní JSON:
+An importable n8n workflow, valid JSON:
 
 1. `n8n-nodes-base.webhook` (typeVersion 2) — POST, path `hello`,
    `responseMode: responseNode`
-2. `n8n-nodes-base.code` (typeVersion 2) — zabalí `$input.first().json.body`
-   spolu s ISO timestampem a vygenerovaným názvem souboru
-3. `n8n-nodes-base.convertToFile` (typeVersion 1.1) — operace `toJson`
-4. `n8n-nodes-base.readWriteFile` (typeVersion 1) — operace `write`, cílová
-   cesta `/data/files/{{ ... }}`
-5. `n8n-nodes-base.respondToWebhook` (typeVersion 1.1) — vrátí JSON s cestou
-6. `n8n-nodes-base.stickyNote` — vysvětlivka přímo v plátně
+2. `n8n-nodes-base.code` (typeVersion 2) — wraps `$input.first().json.body`
+   together with an ISO timestamp and a generated filename
+3. `n8n-nodes-base.convertToFile` (typeVersion 1.1) — operation `toJson`
+4. `n8n-nodes-base.readWriteFile` (typeVersion 1) — operation `write`, target
+   path `/data/files/{{ ... }}`
+5. `n8n-nodes-base.respondToWebhook` (typeVersion 1.1) — returns JSON with the
+   path
+6. `n8n-nodes-base.stickyNote` — an explanation on the canvas itself
 
-Nezapomeň na `connections`, `settings.executionOrder: "v1"` a unikátní `id`
-u každé node.
+Do not forget `connections`, `settings.executionOrder: "v1"` and a unique `id`
+on every node.
 
 ### `docs/API.md`
 
-- tabulka endpointů: `/`, `/healthz`, `/api/v1/...`, `/webhook/...`,
-  `/webhook-test/...`, a poznámka že `/rest/...` je interní a nestabilní
-- jak vytvořit API key (Settings → n8n API), hlavička `X-N8N-API-KEY`
-- `curl` příklady: list workflows, detail, executions, import workflow z
-  souboru, activate/deactivate
-- upozornění, že REST API **nemá** endpoint pro spuštění workflow — od toho
-  jsou webhooky
-- rozdíl `/webhook-test/` (editor otevřený, jeden request) vs `/webhook/`
-  (workflow aktivní, trvalý), v tabulce
-- volání webhooku z jiného kontejneru: `http://n8n:5678/...`, **ne**
+- endpoint table: `/`, `/healthz`, `/api/v1/...`, `/webhook/...`,
+  `/webhook-test/...`, plus a note that `/rest/...` is internal and unstable
+- how to create an API key (Settings → n8n API), header `X-N8N-API-KEY`
+- `curl` examples: list workflows, fetch one, executions, import a workflow
+  from a file, activate/deactivate
+- a note that the REST API has **no** endpoint for triggering a workflow run —
+  webhooks are the supported mechanism
+- the difference between `/webhook-test/` (editor open, single request) and
+  `/webhook/` (workflow active, permanent), as a table
+- calling a webhook from another container: `http://n8n:5678/...`, **not**
   `127.0.0.1`
-- volitelné vystavení ven přes `cloudflared tunnel --url http://127.0.0.1:5678`
-  a nutnost upravit `WEBHOOK_URL` + `./n8n.sh restart`
+- optional external exposure via `cloudflared tunnel --url
+  http://127.0.0.1:5678` and the need to adjust `WEBHOOK_URL` plus
+  `./n8n.sh restart`
 
 ### `docs/NETWORKING.md`
 
-- ASCII diagram topologie
-- tabulka obou sítí
-- co n8n **může**: internet, jiné kontejnery přes DNS jméno, host přes
-  `host.docker.internal` (na Docker Desktop macOS i služby bindnuté na
-  `127.0.0.1`), celá LAN
-- co n8n **nemůže**: filesystem hosta kromě dvou mountů, Docker daemon
-- tabulka už aplikovaného hardeningu a jeho efektu
-- sekce o praktickém riziku: n8n templates z internetu běží s těmito právy
-- volitelný recept na iptables sidecar včetně nevýhod
+- an ASCII topology diagram
+- a table of both networks
+- what n8n **can** reach: the internet, other containers by DNS name, the host
+  via `host.docker.internal` (on Docker Desktop for macOS this includes
+  services bound to `127.0.0.1` only), the whole LAN
+- what n8n **cannot** reach: the host filesystem beyond the two mounts, the
+  Docker daemon
+- a table of the hardening already applied and its effect
+- a section on practical risk: workflows imported from the n8n template library
+  run with exactly these permissions
+- the optional iptables sidecar recipe including its drawbacks
 
 ### `README.md`
 
-Přesně čtyři hlavní sekce, v tomto pořadí:
+Exactly four top-level sections, in this order:
 
-1. **Purpose** — k čemu repo je, co dává, explicitní vymezení rozsahu (není to
-   produkce), licenční poznámka o Sustainable Use License (n8n **není**
-   OSI open source)
-2. **Deployment** — tabulka prerekvizit, `git clone` + `./bootstrap.sh`, popis
-   co bootstrap dělá, první přihlášení, **samostatná a výrazná pasáž o záloze
-   `N8N_ENCRYPTION_KEY`**, publikace na GitHub (přes skript i ručně)
-3. **Usage** — přehled příkazů `./n8n.sh`, výměna souborů s tabulkou mountů,
-   REST API a webhooky s odkazem na `docs/API.md`, import ukázkového workflow,
-   připojení jiného kontejneru s copy-paste YAML snippetem, přístup na host
-   **včetně blockquote s bezpečnostním upozorněním**, upgrade verze, backup
-   a restore
-4. **Teardown & cleanup** — tabulka **všech artefaktů, které projekt na hostu
-   vytvoří** (kontejner, image, dvě sítě, datový adresář, `.env`, `backups/`,
-   ukázkové kontejnery) s uvedením, co je odstraní; rozdíl mezi `down` (pauza)
-   a `destroy --purge-data` (smazání); manuální fallback příkazy; příkazy
-   k ověření, že nic nezbylo
+1. **Purpose** — what the repository is for, what it provides, an explicit
+   scope statement (this is not production), and a licensing note about the
+   Sustainable Use License (n8n is **not** OSI open source)
+2. **Deployment** — prerequisites table, `git clone` + `./bootstrap.sh`, a
+   description of what bootstrap does, first login, **a separate and prominent
+   passage about backing up `N8N_ENCRYPTION_KEY`**, publishing to GitHub (both
+   via the script and manually)
+3. **Usage** — overview of `./n8n.sh` commands, file exchange with the mount
+   table, REST API and webhooks pointing at `docs/API.md`, importing the
+   example workflow, attaching another container with a copy-paste YAML
+   snippet, host access **including a blockquote security warning**, upgrading
+   the version, backup and restore
+4. **Teardown & cleanup** — a table of **every artefact the project creates on
+   the host** (container, image, two networks, data directory, `.env`,
+   `backups/`, the example containers) stating what removes each; the
+   difference between `down` (pause) and `destroy --purge-data` (removal);
+   manual fallback commands; commands to verify nothing is left behind
 
-Na konci přidej strom repozitáře s krátkým popisem souborů.
+Finish with a repository tree and a one-line description per file.
 
-## Kontrola na závěr
+## Final verification
 
-Po vytvoření ověř:
+After creating everything, verify:
 
-1. `bash -n` projde na všech `.sh` souborech
-2. `docker compose config` projde (s dočasným `.env`)
-3. `examples/workflows/hello-webhook.json` je validní JSON
-4. `./bootstrap.sh` doběhne do stavu healthy
-5. `curl -s http://127.0.0.1:5678/healthz` vrátí `{"status":"ok"}`
-6. po `cd examples/sidecar-service && docker compose up -d` projde z kontejneru
-   n8n příkaz `wget -qO- http://whoami/`
-7. `./n8n.sh backup` vytvoří archiv a kontejner nechá běžet
-8. `./n8n.sh status` vypíše obě sítě
+1. `bash -n` passes on every `.sh` file
+2. `docker compose config` passes (with a temporary `.env`)
+3. `examples/workflows/hello-webhook.json` is valid JSON
+4. `./bootstrap.sh` reaches the healthy state
+5. `curl -s http://127.0.0.1:5678/healthz` returns `{"status":"ok"}`
+6. after `cd examples/sidecar-service && docker compose up -d`, running
+   `wget -qO- http://whoami/` and `wget -qO- http://httpbin:8080/get` from
+   inside the n8n container succeeds
+7. `./n8n.sh backup` produces an archive and leaves the container running
+8. `./n8n.sh status` lists both networks
+9. `git status` is clean and `git check-ignore .env backups/` confirms both are
+   excluded
 
-=== KONEC PROMPTU ===
+=== PROMPT END ===
 
 ---
 
-## Poznámky k údržbě
+## Maintenance notes
 
-Když tohle repo změníš, aktualizuj i prompt výše. Prompt je specifikace —
-pokud se rozejde s realitou, přestane být k čemu.
+When you change this repository, update the prompt above as well. The prompt is
+a specification — once it drifts from reality it stops being useful.
 
-Co se nejspíš bude měnit:
+Things most likely to change:
 
-- **`N8N_VERSION`** — ověř aktuální stabilní tag na
-  [Docker Hub](https://hub.docker.com/r/n8nio/n8n/tags). Pozor, n8n publikuje
-  více tag sérií; `stable` a `latest` v době psaní ukazovaly na `1.123.91`.
-- **`typeVersion` u nodes** v ukázkovém workflow — po větším upgrade n8n ověř,
-  že import nehlásí varování.
-- **Názvy env proměnných** — n8n je občas přejmenovává a stará jména deprekuje.
-  Při upgradu zkontroluj `./n8n.sh logs` na deprecation warnings.
+- **`N8N_VERSION`** — check the current stable tag on
+  [Docker Hub](https://hub.docker.com/r/n8nio/n8n/tags). Note that n8n publishes
+  more than one tag series; `stable` and `latest` pointed at `1.123.91` at the
+  time of writing.
+- **`typeVersion` values** in the example workflow — after a major n8n upgrade,
+  confirm that importing it produces no warnings.
+- **Environment variable names** — n8n occasionally renames them and deprecates
+  the old ones. After an upgrade, check `./n8n.sh logs` for deprecation
+  warnings.
