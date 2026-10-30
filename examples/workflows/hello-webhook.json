@@ -1,0 +1,99 @@
+{
+  "name": "Hello Webhook (n8nDemo example)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hello",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1111111-1111-4111-8111-111111111111",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-220, 0],
+      "webhookId": "a1111111-1111-4111-8111-111111111111"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Build a small record out of whatever was POSTed to the webhook.\n// $input.first().json.body holds the parsed request body.\nconst body = $input.first().json.body ?? {};\nconst stamp = new Date().toISOString();\n\nreturn [\n  {\n    json: {\n      receivedAt: stamp,\n      // Safe filename: colons are legal on Linux but awkward to type.\n      fileName: `hello-${stamp.replace(/[:.]/g, '-')}.json`,\n      payload: body,\n    },\n  },\n];"
+      },
+      "id": "b2222222-2222-4222-8222-222222222222",
+      "name": "Build Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "mode": "each",
+        "options": {
+          "format": true
+        }
+      },
+      "id": "c3333333-3333-4333-8333-333333333333",
+      "name": "To JSON File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/data/files/{{ $('Build Record').item.json.fileName }}",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "d4444444-4444-4444-8444-444444444444",
+      "name": "Write To Exchange Dir",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok', writtenTo: '/data/files/' + $('Build Record').item.json.fileName, receivedAt: $('Build Record').item.json.receivedAt }) }}",
+        "options": {}
+      },
+      "id": "e5555555-5555-4555-8555-555555555555",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "content": "## What this does\n\n1. **Webhook** listens for `POST /webhook/hello`.\n2. **Build Record** wraps the request body with a timestamp.\n3. **To JSON File** turns that into a binary file.\n4. **Write To Exchange Dir** writes it to `/data/files/` inside the container,\n   which is `$HOME/docker/n8n_data/files/` on your host.\n5. **Respond** returns the resulting path to the caller.\n\n### Try it\n\nClick **Execute workflow** (test mode), then:\n\n```\ncurl -X POST http://127.0.0.1:5678/webhook-test/hello \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"hello\":\"world\"}'\n```\n\nActivate the workflow to use the production URL `/webhook/hello` instead.\n\nThe file appears on your Mac/Linux host immediately - that is the\nhost-to-container exchange surface.",
+        "height": 420,
+        "width": 420
+      },
+      "id": "f6666666-6666-4666-8666-666666666666",
+      "name": "Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-220, 160]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Build Record", "type": "main", "index": 0 }]]
+    },
+    "Build Record": {
+      "main": [[{ "node": "To JSON File", "type": "main", "index": 0 }]]
+    },
+    "To JSON File": {
+      "main": [[{ "node": "Write To Exchange Dir", "type": "main", "index": 0 }]]
+    },
+    "Write To Exchange Dir": {
+      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

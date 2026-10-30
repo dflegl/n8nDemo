@@ -1,0 +1,100 @@
+# ---------------------------------------------------------------------------
+# n8nDemo - n8n Community Edition, single container, SQLite storage.
+#
+# Managed through ./bootstrap.sh and ./n8n.sh. Running `docker compose` by hand
+# works too, but requires a populated .env (see .env.example).
+# ---------------------------------------------------------------------------
+name: n8ndemo
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:?N8N_VERSION is not set - run ./bootstrap.sh}
+    container_name: n8n
+    restart: unless-stopped
+
+    # Loopback-only publish. Nothing on the LAN can reach this port.
+    ports:
+      - "127.0.0.1:${N8N_PORT:-5678}:5678"
+
+    environment:
+      # --- addressing ---------------------------------------------------
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      # Base URL n8n prints for production webhook endpoints.
+      WEBHOOK_URL: http://localhost:${N8N_PORT:-5678}/
+      # n8n refuses to set its auth cookie over plain HTTP unless this is off.
+      N8N_SECURE_COOKIE: "false"
+
+      # --- storage ------------------------------------------------------
+      DB_TYPE: sqlite
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY is not set - run ./bootstrap.sh}
+
+      # --- time ---------------------------------------------------------
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-Europe/Prague}
+      TZ: ${GENERIC_TIMEZONE:-Europe/Prague}
+
+      # --- features -----------------------------------------------------
+      # Public REST API at /api/v1 (authenticated with an API key created in the UI).
+      N8N_PUBLIC_API_DISABLED: "false"
+      # Task runners: the supported execution model for Code nodes.
+      N8N_RUNNERS_ENABLED: "true"
+      # Allow Code nodes to require built-in and npm modules. Convenient for a
+      # sandbox; see docs/NETWORKING.md for what this implies.
+      NODE_FUNCTION_ALLOW_BUILTIN: "*"
+      NODE_FUNCTION_ALLOW_EXTERNAL: "*"
+
+      # --- hardening that costs nothing ----------------------------------
+      # Code nodes cannot read container environment variables, so a workflow
+      # cannot exfiltrate N8N_ENCRYPTION_KEY.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+
+      # --- noise reduction ------------------------------------------------
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_TEMPLATES_ENABLED: "true"
+      N8N_HIRING_BANNER_ENABLED: "false"
+
+    volumes:
+      # n8n internal state: SQLite database, encryption key file, logs.
+      - ${N8N_DATA_DIR:?N8N_DATA_DIR is not set - run ./bootstrap.sh}/.n8n:/home/node/.n8n
+      # File exchange surface. Read/Write Files from Disk nodes use /data/files.
+      - ${N8N_DATA_DIR}/files:/data/files
+
+    # Makes host services reachable from workflows as host.docker.internal.
+    # Required on Linux; harmless on Docker Desktop where it already exists.
+    # Remove this line if you want workflows to stop resolving the host by name.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # The Docker socket is deliberately NOT mounted. Mounting it would be
+    # equivalent to giving every workflow root on the host.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    healthcheck:
+      # The image ships wget (BusyBox); curl is not guaranteed to be present.
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:5678/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+    networks:
+      - n8n_net
+      - n8n_shared
+
+networks:
+  # Default egress network: NAT to the internet.
+  n8n_net:
+    name: n8n_net
+    driver: bridge
+
+  # Cross-stack network for container-to-container traffic. Declared external
+  # so that `./n8n.sh destroy` cannot tear it out from under other stacks.
+  # Created by bootstrap.sh: docker network create n8n_shared
+  n8n_shared:
+    name: n8n_shared
+    external: true

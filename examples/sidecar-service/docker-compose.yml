@@ -1,0 +1,50 @@
+# ---------------------------------------------------------------------------
+# Example: a second, independent stack that n8n can reach.
+#
+# This is the pattern for making any containerised service available to your
+# workflows. The key part is the `networks` block at the bottom: joining the
+# external `n8n_shared` network, which bootstrap.sh created.
+#
+# Start it:
+#     cd examples/sidecar-service && docker compose up -d
+#
+# Then from an n8n HTTP Request node, call:
+#     http://whoami/           (whoami listens on port 80)
+#     http://httpbin:8080/get  (go-httpbin listens on port 8080)
+#
+# Note the hostnames: plain service names, no ports mapped to the host, no
+# localhost. Docker's embedded DNS resolves them inside the shared network.
+#
+# Stop it:
+#     docker compose down
+# ---------------------------------------------------------------------------
+name: n8ndemo-sidecar
+
+services:
+  # Minimal HTTP echo server - returns the request it received.
+  whoami:
+    image: traefik/whoami:v1.10
+    container_name: whoami
+    restart: unless-stopped
+    networks:
+      - n8n_shared
+    # No `ports:` on purpose. The service is reachable from n8n but not from
+    # the host, which is usually what you want for a backend dependency.
+
+  # Richer HTTP testing service: /get, /post, /status/500, /delay/3, /json ...
+  # This is the maintained multi-arch successor to kennethreitz/httpbin, which
+  # is amd64-only and would run under emulation on Apple Silicon.
+  httpbin:
+    image: mccutchen/go-httpbin:2.26.0
+    container_name: httpbin
+    restart: unless-stopped
+    # go-httpbin listens on 8080, not 80.
+    networks:
+      - n8n_shared
+
+networks:
+  # Must already exist. bootstrap.sh creates it; otherwise:
+  #     docker network create n8n_shared
+  n8n_shared:
+    name: n8n_shared
+    external: true

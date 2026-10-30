@@ -1,0 +1,14 @@
+# Local environment configuration (contains the n8n encryption key) - never commit
+.env
+
+# Local backup archives produced by ./n8n.sh backup
+backups/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor noise
+.idea/
+.vscode/
+*.swp
