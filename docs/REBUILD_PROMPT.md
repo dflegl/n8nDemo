@@ -218,8 +218,11 @@ Publishing to GitHub, parameters `[owner] [repo-name]`, defaults
 - set `git config user.name/user.email` **locally in the repository** (without
   `--global`) so that a globally configured work identity is left alone
 - check `gh auth status`; if the target account is missing, **do not fail
-  silently** — print the `gh auth login --hostname github.com --web`
-  instruction, list the known accounts, and exit with an error
+  silently** — print a plain `gh auth login` instruction plus the
+  `gh auth login --with-token` alternative for headless machines, list the
+  already-authenticated accounts, and exit with an error. Do not put
+  `--hostname github.com` or `--web` in the suggested command: both are gh
+  defaults, and hardcoding `--web` steers headless users away from token auth.
 - `gh auth switch --hostname github.com --user <owner>` if the active account
   is not the target one
 - create an initial commit if the repository has none; refuse to continue if

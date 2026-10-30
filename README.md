@@ -93,8 +93,16 @@ Two things worth knowing:
 ### Publishing this repository to GitHub
 
 ```bash
-gh auth login --hostname github.com --web   # sign in as the target account
+gh auth login                      # sign in as the target account
 ./scripts/github-init.sh dflegl n8nDemo
+```
+
+`gh auth login` defaults to github.com and to the browser flow, and prompts for
+anything else it needs. On a headless machine, authenticate with a personal
+access token instead — it needs the `repo`, `read:org` and `gist` scopes:
+
+```bash
+gh auth login --with-token < token.txt
 ```
 
 The script sets `user.name` and `user.email` **for this repository only**

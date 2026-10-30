@@ -46,9 +46,11 @@ if gh auth status 2>&1 | grep -q "account $OWNER "; then
 else
   warn "Account '$OWNER' is not authenticated in the GitHub CLI."
   echo
-  echo "  Run this, then re-run the script:"
-  echo "      gh auth login --hostname github.com --web"
-  echo "  and sign in as '$OWNER'."
+  echo "  Run this, then re-run the script, signing in as '$OWNER':"
+  echo "      gh auth login"
+  echo
+  echo "  Headless machine? Use a token with the repo, read:org and gist scopes:"
+  echo "      gh auth login --with-token < token.txt"
   echo
   echo "  Already-authenticated accounts:"
   gh auth status 2>&1 | sed -n 's/.*account \([^ ]*\).*/    - \1/p'
